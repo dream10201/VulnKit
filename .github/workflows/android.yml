@@ -23,7 +23,9 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
         cache: gradle
-    - run: ndk-build
+    - run: |
+        cd app/src/main/cpp
+        ndk-build
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build with Gradle
