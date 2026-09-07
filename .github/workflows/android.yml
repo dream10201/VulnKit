@@ -8,28 +8,89 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    env:
+      BUILD_TOOLS_VERSION: "33.0.2"
+      ANDROID_PLATFORM: "android-33"
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup Android NDK modified(export NDK_HOME)
-      with:
-        ndk-version: r26d
-      uses: HoshinoSuzumi/setup-ndk@v1.5.4
-    - name: set up JDK 17
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
         cache: gradle
+
+    - name: Install Android SDK command-line tools and build-tools
+      run: |
+        set -e
+        sudo apt-get update
+        sudo apt-get install -y unzip wget
+        mkdir -p $HOME/android-sdk/cmdline-tools
+        cd $HOME/android-sdk
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline.zip
+        unzip -o cmdline.zip -d cmdline-tools
+        mkdir -p cmdline-tools/latest
+        mv -f cmdline-tools/cmdline-tools/* cmdline-tools/latest/ || true
+        export ANDROID_SDK_ROOT=$HOME/android-sdk
+        # accept licenses and install required packages (non-interactive)
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS_VERSION}"
+
+    - name: Add Android SDK to PATH
+      run: |
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "PATH=$HOME/android-sdk/platform-tools:$HOME/android-sdk/build-tools/${BUILD_TOOLS_VERSION}:$PATH" >> $GITHUB_ENV
+
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-    - name: Build with Gradle
-      run: ./gradlew build
 
-    - name: Upload APK as Artifact
+    - name: Assemble Release APK (unsigned)
+      run: ./gradlew assembleRelease
+
+    - name: Generate ephemeral keystore for signing
+      run: |
+        set -e
+        # generate random passwords and alias
+        KS_PASS=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | cut -c1-20)
+        KEY_PASS=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | cut -c1-20)
+        KEY_ALIAS="ci-key"
+        echo "Generating keystore (release-keystore.jks) ..."
+        keytool -genkeypair -v \
+          -keystore release-keystore.jks \
+          -storepass "$KS_PASS" \
+          -alias "$KEY_ALIAS" \
+          -keypass "$KEY_PASS" \
+          -keyalg RSA -keysize 2048 -validity 10000 \
+          -dname "CN=CI, OU=CI, O=CI, L=CI, ST=CI, C=US"
+        # export variables for following steps
+        echo "KS_PASS=$KS_PASS" >> $GITHUB_ENV
+        echo "KEY_PASS=$KEY_PASS" >> $GITHUB_ENV
+        echo "KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
+
+    - name: Zipalign and sign APKs (using ephemeral keystore)
+      run: |
+        set -e
+        BUILD_TOOLS="$HOME/android-sdk/build-tools/${BUILD_TOOLS_VERSION}"
+        for apk in app/build/outputs/apk/release/*.apk; do
+          echo "Found APK: $apk"
+          aligned="${apk%.apk}-aligned.apk"
+          echo "Zipalign -> $aligned"
+          $BUILD_TOOLS/zipalign -v -p 4 "$apk" "$aligned"
+          echo "Signing $aligned"
+          $BUILD_TOOLS/apksigner sign \
+            --ks release-keystore.jks \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass pass:$KS_PASS \
+            --key-pass pass:$KEY_PASS \
+            "$aligned"
+        done
+
+    - name: Upload signed APKs as Artifact
       uses: actions/upload-artifact@v4
       with:
         name: app-release-apk
-        path: app/build/outputs/apk/release/*.apk
+        path: app/build/outputs/apk/release/*-aligned.apk
