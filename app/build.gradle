@@ -3,10 +3,6 @@ plugins {
 }
 
 android {
-    signingConfigs {
-        'NameError Studio Signature 1' {
-        }
-    }
     namespace 'org.dpdns.sqxy090123.kit.vulnkit'
     compileSdk 34
 
