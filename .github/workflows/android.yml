@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BUILD_TOOLS_VERSION: "33.0.2"
-      ANDROID_PLATFORM: "android-33"
+      ANDROID_PLATFORM: "android-34"
 
     steps:
     - name: Checkout
