@@ -69,13 +69,13 @@ android {
 }
 
 dependencies {
-    implementation libs.appcompat.v131
-    implementation libs.material.v140
-    implementation libs.constraintlayout.v211
-    implementation libs.core.splashscreen
+    implementation libs.appcompat-v131
+    implementation libs.material-v140
+    implementation libs.constraintlayout-v211
+    implementation libs.core-splashscreen
     testImplementation libs.junit
-    androidTestImplementation libs.junit.v113
-    androidTestImplementation libs.espresso.core.v340
+    androidTestImplementation libs.junit-v113
+    androidTestImplementation libs.espresso-core-v340
     implementation libs.recyclerview
     implementation libs.api
     implementation libs.provider
