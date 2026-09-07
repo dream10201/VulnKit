@@ -51,13 +51,6 @@ android {
         }
     }
 
-    // 显式启用 AIDL（虽然默认已启用，但防止被禁用）
-    buildscript {
-        dependencies {
-            classpath 'com.android.tools.build:gradle:8.1.0'
-        }
-    }
-
     buildFeatures {
         aidl true
         viewBinding true
